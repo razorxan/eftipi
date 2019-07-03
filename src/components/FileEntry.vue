@@ -1,7 +1,14 @@
 <template>
-    <tr class="entry" :class="style" @click="e => $emit('click', e)" @dblclick="e => $emit('dblclick', e)">
+    <tr
+        class="entry"
+        :class="style"
+        @click="e => $emit('click', e)"
+        @contextmenu="e => $emit('rightclick', e)"
+        @dblclick="e => $emit('dblclick', e)"
+    >
         <td class="icon"><span :class="icon"></span></td>
-        <td class="name">{{ name }}</td>
+        <td class="edit" v-if="edit"><input type="text" v-model="input"></td>
+        <td class="name" v-else>{{ name }}</td>
         <td class="size">{{ size }}</td>
         <td class="permissions">{{ permissions }}</td>
         <td class="date">{{ formattedDate }}</td>
@@ -12,7 +19,27 @@
 
     export default {
         name: 'file-entry',
+        data () {
+            return {
+                input: ''
+            }
+        },
+        mounted () {
+            this.input = this.name  
+        },
+        watch: {
+            name (v, o) {
+                if (v !== o) {
+                    this.input = this.name
+                }
+            }
+        },
         props: {
+            edit: {
+                type: Boolean,
+                required: false,
+                default: false
+            },
             type: {
                 type: String,
                 required: true
