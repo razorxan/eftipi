@@ -2,9 +2,7 @@
     <tr
         class="entry"
         :class="style"
-        @click="e => $emit('click', e)"
-        @contextmenu="e => $emit('rightclick', e)"
-        @dblclick="e => $emit('dblclick', e)"
+        @click="click"
     >
         <td class="icon"><span :class="icon"></span></td>
         <td class="edit" v-if="edit"><input type="text" v-model="input"></td>
@@ -16,12 +14,14 @@
 </template>
 <script>
     import moment from 'moment'
+    import { setTimeout } from 'timers';
 
     export default {
         name: 'file-entry',
         data () {
             return {
-                input: ''
+                input: '',
+                clicks: 0
             }
         },
         mounted () {
@@ -31,6 +31,11 @@
             name (v, o) {
                 if (v !== o) {
                     this.input = this.name
+                }
+            },
+            clicks (v) {
+                if (v > 1) {
+                    this.$emit('dblclick')
                 }
             }
         },
@@ -96,6 +101,17 @@
                 }
             }
         },
+        methods: {
+            click (e) {
+                if (this.clicks < 1) {
+                    this.$emit('click', e)
+                }
+                this.clicks = this.clicks + 1
+                setTimeout(() => {
+                    this.clicks = 0
+                }, 300)
+            },
+        },
         computed: {
             formattedDate () {
                 return this.date ? moment(this.date).format('Y-MM-DD HH:mm:ss') : ''
@@ -128,17 +144,8 @@
     }
 
 </script>
-<style>
-
-    td.date {
-        min-width: 150px;
-    }
-    td.permissions {
-        min-width: 80px;
-    }
-    td.size {
-        min-width: 80px;
-    }
+<style lang="scss">
+    
     .entry {
         background: none;
         color: #1c1c1b;
@@ -147,41 +154,53 @@
         user-select: none;
         width: 100%;
         border-bottom: 1px solid #c1c1c1;
-        border-top: 1px solid #c1c1c1;
         padding-left: 0;
         margin: 0;
         transition: all .1s ease;
-    }
-
-    .entry > td:first-child {
-        padding: 0 5px
-    }
-
-    .entry > td:nth-child(2) {
-        width: 100%;
-    }
-    
-    .entry.hidden {
-        color: #c1c1c1;
-    }
-
-    .entry.selected {
-        background: #c1c1c1;
-        color: black;
-        transition: all .1s ease;
-    }
-    .entry.selected > td:nth-child(2) {
-        padding-left: 10px;
-        transition: all .1s ease;
-    }
-    .entry:hover {
-        background: #69a2ff;
-        color: white;
-        transition: all .1s ease;
-    }
-    .entry.selected:hover {
-        background: #c1c1c1;
-        color: white;
-        transition: all .1s ease;
+        td {
+            padding: 7px 0;
+            &.date {
+                min-width: 150px;
+            }
+            &.permissions {
+                min-width: 80px;
+            }
+            &.size {
+                min-width: 80px;
+            }
+            &:first-child {
+                padding: 0 5px
+            }
+            &:nth-child(2) {
+                width: 100%;
+                transition: all .1s ease;
+            }
+        }
+        &.hidden {
+            color: #c1c1c1;
+        }
+        &.selected {
+            background: #c1c1c1;
+            color: black;
+            transition: all .1s ease;
+            &:hover {
+                /*
+                background: #c1c1c1;
+                color: white;
+                transition: all .1s ease;
+                */
+            }
+            td:nth-child(2) {
+                padding-left: 10px;
+                transition: all .1s ease;
+            }
+        }
+        &:hover {
+            /*
+            background: #69a2ff;
+            color: white;
+            transition: all .1s ease;
+            */
+        }
     }
 </style>

@@ -4,23 +4,28 @@
             <h2>{{ host }}</h2>
             <button type="button" @click="() => reconnect()">reconnect</button>
             <button type="button" @click="close">close</button>
-            <input type="text" class="cwd" v-model="currentPath" @keydown.stop="inputKey" />
+            <button type="button" @click="list">refresh</button>
+            <button><font-awesome-icon icon="fa-sync" size="lg" /></button>
         </div>
-        <div class="client-window" @click.="unselectAll">
+        <div class="client-window" @click="unselectAll">
             <div class="client-sidebar">
+                tree view here?
                 <ul>
-                    <li @click.stop="newFile">New File</li>
-                    <li @click.stop="mkdir">New Directory</li>
+                    <li @click.stop="filePrompt = true">New File</li>
+                    <li @click.stop="dirPrompt = true">New Directory</li>
                     <li @click.stop="() => mkdir(true)">New Directory and navigate</li>
                     <li @click.stop="list">Refresh</li>
                 </ul>
             </div>
-            <div class="client-explorer">
+            <div class="client-explorer" @click="unselectAll">
+                <div style="display:flex">
+                    <div style="margin-right: 20px">Remote Path</div>
+                    <custom-input type="text" style="flex-grow: 1" class="cwd" v-model="currentPath" @keydown.stop="inputKey" />
+                </div>
                 <table>
                     <file-entry
                         v-for="(file, index) in fileList"
-                        @click="e => fileClicked(e, index)"
-                        @rightclick="e => fileRightClicked(e, index)"
+                        @click.stop="e => fileClicked(e, index)"
                         @dblclick="e => fileDblClicked(e, index)"
                         :key="index"
                         :name="file.name"
@@ -37,6 +42,20 @@
                 </table>
             </div>
         </div>
+        <prompt
+            :open="filePrompt"
+            :title="'New File'"
+            :prompt="'Insert file name here'"
+            @submit="newFile"
+            @cancel="filePrompt = false"
+        />
+        <prompt
+            :open="dirPrompt"
+            :title="'New Directory'"
+            :prompt="'Insert directory name here'"
+            @submit="mkdir"
+            @cancel="dirPrompt = false"
+        />
     </div>
 </template>
 
@@ -73,7 +92,9 @@ export default {
             ctrl: false,
             shift: false,
             connected: false,
-            editing: -1
+            editing: -1,
+            filePrompt: false,
+            dirPrompt: false
         }
     },
     props: {
@@ -110,12 +131,22 @@ export default {
     },
     mounted () {
         window.addEventListener('keydown', e => {
+            
             switch (e.which) {
+                case 38:
+                    this.selectPrev()
+                    break;
+                case 40:
+                    this.selectNext()
+                    break;
                 case 16:
                     if (!this.shift) this.shift = true
                     break;
                 case 17:
                     if (!this.ctrl) this.ctrl = true
+                    break
+                case 46:
+                    this.delete()
                     break
             }
         })
@@ -208,19 +239,95 @@ export default {
                 console.error('error listing files', err)
             }
         },
-        newFile () {
-
-        },
-        async mkdir (navigate = false) {
-            console.log(`${this.cwd}/New Folder`)
-            try {
-                const newPath = `${this.cwd}/New Folder`
-                await this.client.mkdir(newPath)
-                if (navigate) {
-                    this.changeCwd(newPath)
+        async newFile (n) {
+           const name = n.trim()
+           const list = await this.client.list(this.cwd)
+           if (list.find(f => f.name === name)) {
+               alert('Path already exists')
+            } else {
+                try {
+                    const newPath = `${this.cwd}/${name}`
+                    await this.client.put(Buffer.from(''), newPath)
+                    this.filePrompt = false
+                    this.list()
+                } catch (err) {
+                    console.log('error creating file', err)
                 }
-            } catch (err) {
-                console.error('error creating new directory', err)
+           }
+        },
+        async mkdir (n, navigate = false) {
+            const name = n.trim()
+            const list = await this.client.list(this.cwd)
+            if (list.find(f => f.name === name)) {
+                alert('Path already exists')
+            } else {
+                try {
+                    const newPath = `${this.cwd}/${name}`
+                    await this.client.mkdir(newPath)
+                    if (navigate) {
+                        this.changeCwd(newPath)
+                    } else {
+                        this.list()
+                    }
+                    this.dirPrompt = false
+                } catch (err) {
+                    console.error('error creating new directory', err)
+                }
+            }
+            
+        },
+        selectPrev () {
+            let prev
+            if (this.selected.length > 0) {
+                prev = this.selected[this.selected.length - 1] - 1
+                if (prev < 1) prev = this.files.length - 1
+            } else {
+                prev = 1
+            }
+            if (this.ctrl) {
+                return this.selected.push(prev)
+            }
+            this.selected = [prev]
+        },
+        selectNext () {
+            let next
+            if (this.selected.length > 0) {
+                next = this.selected[this.selected.length - 1] + 1
+                if (next > this.files.length - 1) next = 1
+            } else {
+                next = 1
+            }
+            if (this.ctrl) {
+                return this.selected.push(next)
+            }
+            this.selected = [next]
+        },
+        async delete () {
+            if (this.selected.length > 0) {
+                let deletes = 0
+                for (let i of this.selected) {
+                    const deletePath = `${this.cwd}/${this.files[i].name}`
+                    const isDir = this.files[i].type === 'd'
+                    if (isDir) {
+                        try {
+                            await this.client.rmdir(deletePath, true)
+                            deletes++
+                        } catch (err) {
+                            console.error('error deleting', deletePath, err)
+                        }
+                    } else {
+                        try {
+                            await this.client.delete(deletePath)
+                            deletes++
+                        } catch (err) {
+                            console.error('error deleting', deletePath, err)
+                        }
+                    }
+                }
+                if (deletes > 0) {
+                    this.unselectAll()
+                    this.list()
+                }
             }
         },
         sort (a, b) {
@@ -234,15 +341,25 @@ export default {
             if (a.type !== 'd' && b.type !== 'd') return byName(a.name, b.name)
             if (a.type !== 'd' && b.type === 'd') return 1
         },
-        fileRightClicked (e, index) {
-            this.editing = index
-        },
         fileClicked (e, index)
         {
             e.stopPropagation()
             if (this.ctrl) {
-                this.selected.push(index)
+                if (!this.selected.includes(index)) {
+                    this.selected.push(index)
+                }
+            } else if (this.shift) {
+                
+                const start = Math.min(index, this.selected[this.selected.length -1])
+                const end = Math.max(index, this.selected[this.selected.length -1])
+                
+                this.selected = []
+                for (let i = start; i <= end; i++) this.selected.push(i)
             } else {
+                if (this.selected.includes(index) && this.selected.length === 1) {
+                    return this.editing = index
+                }
+                this.editing = -1
                 this.selected = [index]
             }
         },
@@ -328,67 +445,52 @@ export default {
 }
 </script>
 
-<style>
-body, html {
-    margin: 0;
-    width: 100%;
-    height: 100%;
-    position: absolute;
-}
+<style lang="scss" scoped>
+
 .client {
     position:relative;
     width: 100%;
     height: 100%;
     display:flex;
     flex-direction: column;
+    .client-window {
+        display:flex;
+        flex-direction: row;
+        flex-grow: 1;
+        padding: 30px 0;
+
+        .client-sidebar {
+            min-width: 200px;
+        }
+
+        .client-explorer {
+            flex-grow: 1;
+            table {
+                width: 100%;
+                margin: 0;
+                padding: 0;
+                border-collapse: collapse;
+                border-spacing: 0;
+            }
+        }
+
+    }
+
+    
+
+    .client-toolbar {
+        .cwd {
+            width: 100%;
+            height: 50px;
+            font-size: 30px;
+            &:focus {
+                outline-width: 0;
+            }
+        }
+    }
+    
 }
 
-.client-toolbar {
 
-}
-
-.client-window {
-    display:flex;
-    flex-direction: row;
-    flex-grow: 1;
-}
-
-.client-sidebar {
-    min-width: 200px;
-}
-
-.client-explorer {
-    flex-grow: 1;
-}
-
-* {
-    font-family: 'Roboto', sans-serif;
-    font-weight: 300;
-}
-.cwd {
-    width: 100%;
-    border: none;
-    height: 50px;
-    font-size: 30px;
-}
-
-.cwd:focus {
-    outline-width: 0;
-}
-#app {
-    font-family: 'Avenir', Helvetica, Arial, sans-serif;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-    text-align: center;
-    color: #2c3e50;
-    margin-top: 60px;
-}
-table {
-    width: 100%;
-    margin: 0;
-    padding: 0;
-    border-collapse: collapse;
-    border-spacing: 0;
-}
 </style>
 
