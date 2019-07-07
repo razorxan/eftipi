@@ -67,6 +67,11 @@ class Client extends EventEmitter
         }
     }
 
+    rename (oldPath, newPath)
+    {
+        return this.client.rename(oldPath, newPath)
+    }
+
     put (input, output)
     {
         return this.client.put(input, output)

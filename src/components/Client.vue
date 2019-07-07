@@ -1,22 +1,18 @@
 <template>
     <div class="client" @click="selected = []" v-if="connected">
         <div class="client-toolbar">
-            <h2>{{ host }}</h2>
-            <button type="button" @click="() => reconnect()">reconnect</button>
-            <button type="button" @click="close">close</button>
-            <button type="button" @click="list">refresh</button>
-            <button><font-awesome-icon icon="fa-sync" size="lg" /></button>
+            <button type="button" @click="reconnect"><font-awesome-icon icon="ethernet" prefix="far" size="lg" /></button>
+            <button title="Refresh File Listing" @click="list"><font-awesome-icon icon="sync" prefix="far" size="lg" /></button>
+            <button type="button" @click="close"><font-awesome-icon icon="times" prefix="far" size="lg" /></button>
+            <button type="button" @click="dirPrompt = true"><font-awesome-icon icon="folder-plus" prefix="far" size="lg" /></button>
+            <button type="button" @click="filePrompt = true"><font-awesome-icon icon="file-medical" prefix="far" size="lg" /></button>
         </div>
         <div class="client-window" @click="unselectAll">
+            <!--
             <div class="client-sidebar">
                 tree view here?
-                <ul>
-                    <li @click.stop="filePrompt = true">New File</li>
-                    <li @click.stop="dirPrompt = true">New Directory</li>
-                    <li @click.stop="() => mkdir(true)">New Directory and navigate</li>
-                    <li @click.stop="list">Refresh</li>
-                </ul>
             </div>
+            -->
             <div class="client-explorer" @click="unselectAll">
                 <div style="display:flex">
                     <div style="margin-right: 20px">Remote Path</div>
@@ -27,6 +23,8 @@
                         v-for="(file, index) in fileList"
                         @click.stop="e => fileClicked(e, index)"
                         @dblclick="e => fileDblClicked(e, index)"
+                        @edit="e => rename(e, index)"
+                        @cancel="this.edit = -1"
                         :key="index"
                         :name="file.name"
                         :size="file.size"
@@ -62,7 +60,7 @@
 <script>
 /* eslint-disable */
 import path from 'path'
-import fs from 'fs'
+import fs, { mkdtemp } from 'fs'
 import { exec } from 'child_process'
 import { EventEmitter } from 'events'
 import { setTimeout } from 'timers';
@@ -131,8 +129,16 @@ export default {
     },
     mounted () {
         window.addEventListener('keydown', e => {
-            
             switch (e.which) {
+                case 13:
+                    this.submitDirectory()
+                    break;
+                case 8:
+                    this.goUp()
+                    break;
+                case 113:
+                    this.editSelected()
+                    break;
                 case 38:
                     this.selectPrev()
                     break;
@@ -160,6 +166,7 @@ export default {
                     break
             }
         })
+
         
         this.reconnect()
         
@@ -251,7 +258,7 @@ export default {
                     this.filePrompt = false
                     this.list()
                 } catch (err) {
-                    console.log('error creating file', err)
+                    console.error('error creating file', err)
                 }
            }
         },
@@ -356,7 +363,7 @@ export default {
                 this.selected = []
                 for (let i = start; i <= end; i++) this.selected.push(i)
             } else {
-                if (this.selected.includes(index) && this.selected.length === 1) {
+                if (this.selected.includes(index) && this.selected.length === 1 && this.files[this.selected[0]].name !== '..') {
                     return this.editing = index
                 }
                 this.editing = -1
@@ -406,6 +413,36 @@ export default {
                 console.error('error getting file', err)
             }
             
+        },
+        submitDirectory () {
+            if (this.selected.length === 1 && this.fileList[this.selected[0]].type === 'd') {
+                const newPath = this.fileList[this.selected[0]].path
+                this.changeCwd(newPath)
+            }
+        },
+        goUp () {
+            const newPath = path.resolve(`${this.cwd}/..`)
+            this.changeCwd(newPath)
+        },
+        editSelected () {
+            if (this.selected.length === 1 && this.files[this.selected[0]].name !== '..') {
+                this.editing = this.selected[0]
+            }
+        },
+        async rename (newName, index) {
+            const oldName = this.fileList[index].name
+            if (newName !== oldName) {
+                try {
+                    const oldPath = `${this.cwd}/${oldName}`
+                    const newPath = `${this.cwd}/${newName}`
+                    await this.client.rename(oldPath, newPath)
+                    this.unselectAll()
+                    this.list()
+                } catch (err) {
+                    console.error('error renaming', oldPath, ' to ', newPath, err)
+                }
+            }
+            
         }
     },
     watch: {
@@ -446,7 +483,6 @@ export default {
 </script>
 
 <style lang="scss" scoped>
-
 .client {
     position:relative;
     width: 100%;
@@ -479,12 +515,17 @@ export default {
     
 
     .client-toolbar {
-        .cwd {
-            width: 100%;
-            height: 50px;
-            font-size: 30px;
+        padding: 30px 0;
+        button {
+            background: none;
+            border: 1px solid #464646;
+            color: #464646;
+            font-size: 15px;
+            height: 30px;
+            display: inline-block;
+            margin: 0;
             &:focus {
-                outline-width: 0;
+                outline: none;
             }
         }
     }

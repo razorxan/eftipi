@@ -5,7 +5,7 @@
         @click="click"
     >
         <td class="icon"><span :class="icon"></span></td>
-        <td class="edit" v-if="edit"><input type="text" v-model="input"></td>
+        <td class="edit" v-if="edit"><input ref="edit" type="text" v-model="input" @keydown.stop="keydown"></td>
         <td class="name" v-else>{{ name }}</td>
         <td class="size">{{ size }}</td>
         <td class="permissions">{{ permissions }}</td>
@@ -15,7 +15,8 @@
 <script>
     import moment from 'moment'
     import { setTimeout } from 'timers';
-
+    import Vue from 'vue'
+import { timingSafeEqual } from 'crypto';
     export default {
         name: 'file-entry',
         data () {
@@ -25,7 +26,7 @@
             }
         },
         mounted () {
-            this.input = this.name  
+            this.input = this.name
         },
         watch: {
             name (v, o) {
@@ -36,6 +37,13 @@
             clicks (v) {
                 if (v > 1) {
                     this.$emit('dblclick')
+                }
+            },
+            async edit (v, o) {
+                await Vue.nextTick()
+                if (v === true && o === false) {
+                    this.$refs.edit.focus()
+                    this.$refs.edit.select()
                 }
             }
         },
@@ -102,6 +110,18 @@
             }
         },
         methods: {
+            keydown (e) {
+                switch (e.which) {
+                    case 13:
+                        this.$emit('edit', this.input.trim())
+                        this.input = ''
+                        break;
+                    case 17:
+                        this.$emit('cancel')
+                        this.input = ''
+                        break;
+                }
+            },
             click (e) {
                 if (this.clicks < 1) {
                     this.$emit('click', e)

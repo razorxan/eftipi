@@ -31,6 +31,19 @@
 import Client from './components/Client'
 import uniqid from 'uniqid'
 import ClientFactory from './Client'
+import dotenv from 'dotenv-flow'
+
+
+dotenv.config()
+// eslint-disable-next-line
+
+const TYPE     = process.env.EFTIPI_TYPE || ''
+const HOST     = process.env.EFTIPI_HOST || ''
+const USER     = process.env.EFTIPI_USER || ''
+const PASSWORD = process.env.EFTIPI_PASSWORD || ''
+// eslint-disable-next-line 
+console.log(process.env)
+
 export default {
     name: 'app',
     components: {
@@ -39,11 +52,11 @@ export default {
     data () {
         return {
             clients: [],
-            port: 22,
-            type: 'sftp',
-            host: '',
-            user: '',
-            password: ''
+            port: 21,
+            type: TYPE,
+            host: HOST,
+            user: USER,
+            password: PASSWORD
         }
     },
     methods: {
